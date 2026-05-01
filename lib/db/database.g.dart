@@ -325,7 +325,10 @@ class BoardList extends DataClass implements Insertable<BoardList> {
   /// ULID.
   final String id;
 
-  /// Owning board's id.
+  /// Owning board's id. Cascade-deletes when the board is removed.
+  /// Enforced at the SQL level via [customConstraints] below — the
+  /// fluent `.references()` call only declares the relationship for
+  /// Drift's codegen and does NOT emit a `REFERENCES` clause.
   final String boardId;
 
   /// Lane name, e.g. "Crux", "Working on", "Done".
@@ -669,7 +672,7 @@ class Card extends DataClass implements Insertable<Card> {
   /// ULID.
   final String id;
 
-  /// Owning list's id.
+  /// Owning list's id. Cascade-deletes when the list is removed.
   final String listId;
 
   /// Card title — short, board-visible.

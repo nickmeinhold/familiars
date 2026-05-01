@@ -28,8 +28,12 @@ class Lists extends Table {
   /// ULID.
   TextColumn get id => text()();
 
-  /// Owning board's id.
-  TextColumn get boardId => text().references(Boards, #id)();
+  /// Owning board's id. Cascade-deletes when the board is removed.
+  /// Enforced at the SQL level via [customConstraints] below — the
+  /// fluent `.references()` call only declares the relationship for
+  /// Drift's codegen and does NOT emit a `REFERENCES` clause.
+  TextColumn get boardId =>
+      text().references(Boards, #id, onDelete: KeyAction.cascade)();
 
   /// Lane name, e.g. "Crux", "Working on", "Done".
   TextColumn get name => text()();
@@ -39,6 +43,11 @@ class Lists extends Table {
 
   @override
   Set<Column> get primaryKey => {id};
+
+  @override
+  List<String> get customConstraints => [
+        'FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE',
+      ];
 }
 
 /// Cards: tasks. Each card lives in exactly one list.
@@ -57,8 +66,9 @@ class Cards extends Table {
   /// ULID.
   TextColumn get id => text()();
 
-  /// Owning list's id.
-  TextColumn get listId => text().references(Lists, #id)();
+  /// Owning list's id. Cascade-deletes when the list is removed.
+  TextColumn get listId =>
+      text().references(Lists, #id, onDelete: KeyAction.cascade)();
 
   /// Card title — short, board-visible.
   TextColumn get title => text()();
@@ -85,4 +95,9 @@ class Cards extends Table {
 
   @override
   Set<Column> get primaryKey => {id};
+
+  @override
+  List<String> get customConstraints => [
+        'FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE',
+      ];
 }

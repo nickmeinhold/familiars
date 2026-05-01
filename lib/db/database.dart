@@ -36,4 +36,20 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   int get schemaVersion => 1;
+
+  /// Migration strategy. Phase 0 only knows version 1; the
+  /// `beforeOpen` hook turns on SQLite foreign-key enforcement so
+  /// the FKs declared on [Lists] and [Cards] actually fire.
+  /// `NativeDatabase` does not enable foreign keys by default.
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          // No upgrade paths yet — the first schema bump will land
+          // here with explicit per-version migrations.
+        },
+        beforeOpen: (details) async {
+          await customStatement('PRAGMA foreign_keys = ON');
+        },
+      );
 }
