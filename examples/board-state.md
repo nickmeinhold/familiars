@@ -39,7 +39,7 @@ Familiars currently on the board:
   🟣 Cassia  — running. 23 minutes used today. 2 cards.
   🟢 Sieve   — idle. Last summoned 3 days ago. 1 card waiting in In review.
   ⚫ Brick   — resting. Hit weekly budget cap on Tuesday's deploy. 0 cards.
-  🔔 The Bell — listening for taps with freeform tasks. 3 cards in Ideas.
+  🔔 The Bell — capture surface. 3 [bell] cards in Ideas awaiting triage.
 ```
 
 ## What the user sees over the course of a session
