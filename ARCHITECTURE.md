@@ -113,6 +113,12 @@ class Runs extends Table {
 
 The `position REAL` trick: when you drop a card between cards with positions `1.0` and `2.0`, you give it `1.5`. Drop again between `1.0` and `1.5`, give it `1.25`. No mass-resequence on every drop. Same for lists.
 
+### FTS5 over Runs (Phase 1, land with the prompt/transcript/output columns)
+
+The Runs table above carries only `outputDigest` today. In Phase 1 it grows the long-form columns the grimoire actually needs: `prompt` (what was asked), `transcript` (the full mid-run progress thread), `output` (the final result before digest). The moment those columns land, an FTS5 virtual table should land alongside them — `runs_fts(prompt, transcript, output)` in `external content` mode pointed at `runs`, kept in sync via `AFTER INSERT/UPDATE/DELETE` triggers on the base table. This is cheap on day one (a handful of triggers, one virtual table, zero impact on the write path that matters); it is painful to retrofit at scale, because the fix is "rebuild the index over every run ever recorded" and that bill grows linearly with the grimoire's value.
+
+Why now, before the columns even exist: principles 1, 8 and 10 jointly promise an accumulating, surprise-flagged, searchable history. The user-facing operations that promise implies — *"find the run where I asked Cassia about the X bug,"* grimoire browsing across a familiar's career, debugging a familiar's behavioural drift by diffing how it answered the same kind of prompt six months apart — are all full-text queries over `runs.{prompt, transcript, output}`. Without FTS5 they degrade into `LIKE '%...%'` scans, which work for ten runs and embarrass us at ten thousand. Anchor the decision here so the Phase 1 implementer adds plain `TEXT` columns *and* the matching virtual table in one migration, not two.
+
 ## REST endpoints
 
 ```
