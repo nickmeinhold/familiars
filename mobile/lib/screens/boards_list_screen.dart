@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../widgets/text_prompt.dart';
 
 /// Lists boards (and creates them). Tap to open a board.
 class BoardsListScreen extends StatefulWidget {
@@ -45,7 +46,7 @@ class _BoardsListScreenState extends State<BoardsListScreen> {
   }
 
   Future<void> _createBoard() async {
-    final name = await _promptForText(
+    final name = await promptForText(
       context: context,
       title: 'New board',
       hint: 'Board name',
@@ -134,34 +135,3 @@ class _BoardsListScreenState extends State<BoardsListScreen> {
   }
 }
 
-/// Tiny modal text-prompt helper. Returns null if cancelled.
-Future<String?> _promptForText({
-  required BuildContext context,
-  required String title,
-  required String hint,
-  String? initial,
-}) async {
-  final controller = TextEditingController(text: initial);
-  return showDialog<String>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        decoration: InputDecoration(hintText: hint),
-        onSubmitted: (v) => Navigator.of(ctx).pop(v),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(ctx).pop(controller.text),
-          child: const Text('Save'),
-        ),
-      ],
-    ),
-  );
-}

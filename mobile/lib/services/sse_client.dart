@@ -3,19 +3,66 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/board.dart';
 import 'api_client.dart';
 import 'auth_service.dart';
 
-/// One server-sent event from the familiars-server board stream.
-class BoardEvent {
-  /// e.g. `card_created`, `card_updated`, `card_deleted`, `card_moved`,
-  /// `list_created`, `list_updated`, `list_deleted`.
-  final String type;
+/// Sealed hierarchy of server-sent events from the familiars-server board
+/// stream. Mirrors the closed set of event types in `lib/api/stream_router.dart`
+/// — using a sealed class lets the analyzer enforce exhaustive switching
+/// instead of silently no-op'ing on a typo'd string literal.
+sealed class BoardEvent {
+  const BoardEvent();
 
-  /// Decoded JSON payload from the `data:` line.
-  final Map<String, dynamic> data;
+  /// Parse a raw SSE frame (event name + decoded data payload) into a typed
+  /// event. Returns null for unknown event types — callers should ignore
+  /// rather than crash, since the server may add types ahead of clients.
+  static BoardEvent? fromRaw(String type, Map<String, dynamic> data) {
+    switch (type) {
+      case 'card_created':
+        return CardCreated(Card.fromJson(data));
+      case 'card_updated':
+        return CardUpdated(Card.fromJson(data));
+      case 'card_moved':
+        return CardMoved(Card.fromJson(data));
+      case 'card_deleted':
+        return CardDeleted(data['id'] as String);
+      case 'list_created':
+        return const ListChanged();
+      case 'list_updated':
+        return const ListChanged();
+      case 'list_deleted':
+        return const ListChanged();
+      default:
+        return null;
+    }
+  }
+}
 
-  const BoardEvent(this.type, this.data);
+class CardCreated extends BoardEvent {
+  final Card card;
+  const CardCreated(this.card);
+}
+
+class CardUpdated extends BoardEvent {
+  final Card card;
+  const CardUpdated(this.card);
+}
+
+class CardMoved extends BoardEvent {
+  final Card card;
+  const CardMoved(this.card);
+}
+
+class CardDeleted extends BoardEvent {
+  final String cardId;
+  const CardDeleted(this.cardId);
+}
+
+/// Catch-all for list mutations — phase 0 reloads the board on these rather
+/// than reconciling per-event. Refine when list editing matures.
+class ListChanged extends BoardEvent {
+  const ListChanged();
 }
 
 /// Subscribes to `/api/boards/<id>/stream` and parses the SSE wire format.
@@ -63,10 +110,18 @@ class SseClient {
           try {
             final decoded = jsonDecode(dataBuf.toString());
             if (decoded is Map<String, dynamic>) {
-              yield BoardEvent(eventName, decoded);
+              final ev = BoardEvent.fromRaw(eventName, decoded);
+              if (ev != null) yield ev;
+              // else: unknown event type — server is ahead of client; ignore.
             }
-          } catch (_) {
-            // skip malformed frames
+          } catch (e) {
+            // Skip malformed frames but surface in debug mode so we notice
+            // protocol drift early.
+            assert(() {
+              // ignore: avoid_print
+              print('[SseClient] dropped malformed frame "$eventName": $e');
+              return true;
+            }());
           }
         }
         eventName = null;

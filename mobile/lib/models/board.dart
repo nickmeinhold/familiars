@@ -81,6 +81,9 @@ class Card {
     String? description,
     String? listId,
     double? position,
+    String? prompt,
+    String? prUrl,
+    String? mediaKey,
   }) =>
       Card(
         id: id,
@@ -89,9 +92,9 @@ class Card {
         title: title ?? this.title,
         description: description ?? this.description,
         position: position ?? this.position,
-        prompt: prompt,
-        prUrl: prUrl,
-        mediaKey: mediaKey,
+        prompt: prompt ?? this.prompt,
+        prUrl: prUrl ?? this.prUrl,
+        mediaKey: mediaKey ?? this.mediaKey,
       );
 }
 

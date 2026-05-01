@@ -7,6 +7,7 @@ import '../models/board.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/sse_client.dart';
+import '../widgets/text_prompt.dart';
 
 /// The main proof-point screen: lanes of cards with drag-drop and live SSE.
 ///
@@ -42,8 +43,18 @@ class _BoardScreenState extends State<BoardScreen> {
   StreamSubscription<BoardEvent>? _sseSub;
 
   /// Card ids currently being dragged locally — incoming SSE events for these
-  /// are ignored to avoid fighting with the user's gesture.
+  /// are ignored to avoid fighting with the user's gesture. Entries are kept
+  /// in the set for a short post-drop dampening window so a late SSE echo
+  /// can't re-snap the card after the optimistic update has already landed.
   final Set<String> _activeDragIds = {};
+
+  /// Current SSE reconnect backoff. Reset to [_minReconnect] on a successful
+  /// connection (i.e. when we receive any event); doubled on each failure up
+  /// to [_maxReconnect]. Prevents hammering the server when it's down.
+  Duration _reconnectDelay = _minReconnect;
+  static const Duration _minReconnect = Duration(seconds: 2);
+  static const Duration _maxReconnect = Duration(seconds: 30);
+  Timer? _reconnectTimer;
 
   @override
   void initState() {
@@ -54,6 +65,7 @@ class _BoardScreenState extends State<BoardScreen> {
 
   @override
   void dispose() {
+    _reconnectTimer?.cancel();
     _sseSub?.cancel();
     _sse.close();
     super.dispose();
@@ -77,49 +89,51 @@ class _BoardScreenState extends State<BoardScreen> {
   void _connectSse() {
     _sseSub?.cancel();
     _sseSub = _sse.connect(widget.boardId).listen(
-      _onSseEvent,
+      (ev) {
+        // First successful event resets the backoff window.
+        _reconnectDelay = _minReconnect;
+        _onSseEvent(ev);
+      },
       onError: (Object err) {
-        // Reconnect after a short delay; keeps the screen useful through
-        // transient network blips.
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) _connectSse();
-        });
+        if (err is UnauthenticatedException) {
+          // Token expired — bail back to the auth gate rather than spinning.
+          widget.auth.signOut();
+          return;
+        }
+        _scheduleReconnect();
       },
-      onDone: () {
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) _connectSse();
-        });
-      },
+      onDone: _scheduleReconnect,
     );
+  }
+
+  void _scheduleReconnect() {
+    if (!mounted) return;
+    _reconnectTimer?.cancel();
+    final delay = _reconnectDelay;
+    _reconnectTimer = Timer(delay, () {
+      if (mounted) _connectSse();
+    });
+    // Exponential backoff capped at [_maxReconnect].
+    final next = delay * 2;
+    _reconnectDelay = next > _maxReconnect ? _maxReconnect : next;
   }
 
   void _onSseEvent(BoardEvent ev) {
     final board = _board;
     if (board == null) return;
-    final data = ev.data;
     setState(() {
-      switch (ev.type) {
-        case 'card_created':
-          _applyCardUpsert(board, Card.fromJson(data));
-          break;
-        case 'card_updated':
-          _applyCardUpsert(board, Card.fromJson(data));
-          break;
-        case 'card_moved':
-          final id = data['id'] as String?;
-          if (id == null || _activeDragIds.contains(id)) break;
-          _applyCardUpsert(board, Card.fromJson(data));
-          break;
-        case 'card_deleted':
-          final id = data['id'] as String?;
-          if (id != null) _applyCardDelete(board, id);
-          break;
-        case 'list_created':
-        case 'list_updated':
-        case 'list_deleted':
-          // Phase 0 keeps lists static — refetch lazily for these.
+      switch (ev) {
+        case CardCreated(:final card) || CardUpdated(:final card):
+          _applyCardUpsert(board, card);
+        case CardMoved(:final card):
+          if (_activeDragIds.contains(card.id)) break;
+          _applyCardUpsert(board, card);
+        case CardDeleted(:final cardId):
+          _applyCardDelete(board, cardId);
+        case ListChanged():
+          // Phase 0 keeps lists static — refetch lazily for these. Future:
+          // reconcile per-event using the typed payload like cards.
           _load();
-          break;
       }
     });
   }
@@ -178,8 +192,8 @@ class _BoardScreenState extends State<BoardScreen> {
     final newPos = _positionForInsert(dstCardsWithoutDragged, clampedIdx);
     final updated = card.copyWith(listId: toListId, position: newPos);
 
+    _activeDragIds.add(cardId);
     setState(() {
-      _activeDragIds.add(cardId);
       // Replace src list cards
       final lists = [...board.lists];
       final srcIdx = lists.indexWhere((l) => l.id == fromListId);
@@ -212,14 +226,20 @@ class _BoardScreenState extends State<BoardScreen> {
       );
       await _load();
     } finally {
-      if (mounted) {
-        setState(() => _activeDragIds.remove(cardId));
-      }
+      // Keep the active-drag guard in place briefly so a late SSE echo of
+      // our own move can't re-snap the card after the optimistic update has
+      // already landed. 500ms is long enough to cover bus latency without
+      // delaying genuine remote-origin moves perceptibly.
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          setState(() => _activeDragIds.remove(cardId));
+        }
+      });
     }
   }
 
   Future<void> _addCardToList(BoardList list) async {
-    final title = await _promptForText(
+    final title = await promptForText(
       context: context,
       title: 'New card',
       hint: 'Title',
@@ -236,8 +256,8 @@ class _BoardScreenState extends State<BoardScreen> {
         title: title,
         position: lastPos,
       );
-      // SSE will reconcile, but reload to be safe in case stream is dropped.
-      await _load();
+      // SSE delivers the `card_created` event and the screen reconciles
+      // through [_onSseEvent]; no explicit reload needed.
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -259,7 +279,7 @@ class _BoardScreenState extends State<BoardScreen> {
         title: result.title,
         description: result.description,
       );
-      await _load();
+      // SSE delivers `card_updated` for reconciliation.
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -269,7 +289,7 @@ class _BoardScreenState extends State<BoardScreen> {
   }
 
   Future<void> _addList() async {
-    final name = await _promptForText(
+    final name = await promptForText(
       context: context,
       title: 'New list',
       hint: 'List name',
@@ -285,7 +305,7 @@ class _BoardScreenState extends State<BoardScreen> {
         name: name,
         position: lastPos,
       );
-      await _load();
+      // ListChanged event triggers a reload via [_onSseEvent].
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -442,10 +462,14 @@ class _LaneWidget extends StatelessWidget {
   }
 }
 
-/// The drop target for a lane. Hosts the cards as draggables and accepts drops
-/// at any vertical position — the index is computed from the current pointer
-/// position relative to the laid-out cards.
-class _CardListDropZone extends StatefulWidget {
+/// The drop target for a lane.
+///
+/// Each card is wrapped in a "drop above this index" `DragTarget` (rendered
+/// as a thin gap so the visual indicator can light up between cards), with a
+/// final "append at end" target after the last card. This means the insert
+/// index is whatever target Flutter's hit-testing landed on — no
+/// uniform-card-height approximation, no magic numbers.
+class _CardListDropZone extends StatelessWidget {
   final BoardList list;
   final void Function(Card) onTap;
   final Future<void> Function({
@@ -462,54 +486,105 @@ class _CardListDropZone extends StatefulWidget {
   });
 
   @override
-  State<_CardListDropZone> createState() => _CardListDropZoneState();
-}
-
-class _CardListDropZoneState extends State<_CardListDropZone> {
-  /// Index where a hovering card would land if dropped right now, or null.
-  int? _hoverIndex;
-
-  @override
   Widget build(BuildContext context) {
-    final cards = widget.list.cards;
-    return DragTarget<_CardDragPayload>(
-      onWillAcceptWithDetails: (_) => true,
-      onMove: (details) {
-        // Find which card the pointer is currently over and snap to insert
-        // before/after it. We don't have per-card render boxes here so use a
-        // simple uniform-height approximation tied to the listview's layout.
-        final box = context.findRenderObject() as RenderBox?;
-        if (box == null) return;
-        final local = box.globalToLocal(details.offset);
-        const cardHeight = 64.0;
-        final idx = (local.dy / cardHeight).round().clamp(0, cards.length);
-        if (_hoverIndex != idx) setState(() => _hoverIndex = idx);
-      },
-      onLeave: (_) => setState(() => _hoverIndex = null),
-      onAcceptWithDetails: (details) {
-        final payload = details.data;
-        final idx = _hoverIndex ?? cards.length;
-        setState(() => _hoverIndex = null);
-        widget.onCardDropped(
-          cardId: payload.card.id,
-          fromListId: payload.fromListId,
-          toListId: widget.list.id,
-          toIndex: idx,
-        );
-      },
-      builder: (context, candidate, rejected) {
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          itemCount: cards.length,
-          itemBuilder: (_, i) => _DraggableCard(
-            card: cards[i],
-            fromListId: widget.list.id,
-            onTap: () => widget.onTap(cards[i]),
-            highlightAbove: _hoverIndex == i,
-          ),
+    final cards = list.cards;
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      // One gap-target above each card, plus a tail target at the end.
+      itemCount: cards.length + 1,
+      itemBuilder: (_, i) {
+        if (i == cards.length) {
+          // Tail: append-at-end target. Stretches to fill remaining space so
+          // dropping into empty whitespace below the last card still works.
+          return _GapDropTarget(
+            index: cards.length,
+            listId: list.id,
+            onCardDropped: onCardDropped,
+            minHeight: 80,
+            expand: true,
+          );
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _GapDropTarget(
+              index: i,
+              listId: list.id,
+              onCardDropped: onCardDropped,
+            ),
+            _DraggableCard(
+              card: cards[i],
+              fromListId: list.id,
+              onTap: () => onTap(cards[i]),
+            ),
+          ],
         );
       },
     );
+  }
+}
+
+/// A thin (or expanding) gap between cards that accepts a card-drag and
+/// reports its [index] as the insert position. Lights up when a drag hovers
+/// over it. Per-target hit-testing replaces the previous magic-number
+/// uniform-card-height heuristic.
+class _GapDropTarget extends StatefulWidget {
+  final int index;
+  final String listId;
+  final double minHeight;
+  final bool expand;
+  final Future<void> Function({
+    required String cardId,
+    required String fromListId,
+    required String toListId,
+    required int toIndex,
+  }) onCardDropped;
+
+  const _GapDropTarget({
+    required this.index,
+    required this.listId,
+    required this.onCardDropped,
+    this.minHeight = 8,
+    this.expand = false,
+  });
+
+  @override
+  State<_GapDropTarget> createState() => _GapDropTargetState();
+}
+
+class _GapDropTargetState extends State<_GapDropTarget> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final indicator = AnimatedContainer(
+      duration: const Duration(milliseconds: 100),
+      height: _hover ? 12 : widget.minHeight,
+      decoration: BoxDecoration(
+        color: _hover
+            ? Theme.of(context).colorScheme.primary
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(4),
+      ),
+    );
+    final target = DragTarget<_CardDragPayload>(
+      onWillAcceptWithDetails: (_) {
+        setState(() => _hover = true);
+        return true;
+      },
+      onLeave: (_) => setState(() => _hover = false),
+      onAcceptWithDetails: (details) {
+        setState(() => _hover = false);
+        widget.onCardDropped(
+          cardId: details.data.card.id,
+          fromListId: details.data.fromListId,
+          toListId: widget.listId,
+          toIndex: widget.index,
+        );
+      },
+      builder: (_, __, ___) => indicator,
+    );
+    return widget.expand ? Expanded(child: target) : target;
   }
 }
 
@@ -523,19 +598,17 @@ class _DraggableCard extends StatelessWidget {
   final Card card;
   final String fromListId;
   final VoidCallback onTap;
-  final bool highlightAbove;
 
   const _DraggableCard({
     required this.card,
     required this.fromListId,
     required this.onTap,
-    required this.highlightAbove,
   });
 
   @override
   Widget build(BuildContext context) {
     final tile = m.Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
+      margin: const EdgeInsets.symmetric(vertical: 2),
       child: ListTile(
         title: Text(card.title),
         subtitle: card.description != null && card.description!.isNotEmpty
@@ -548,28 +621,15 @@ class _DraggableCard extends StatelessWidget {
         onTap: onTap,
       ),
     );
-    return Column(
-      children: [
-        if (highlightAbove)
-          Container(
-            height: 4,
-            margin: const EdgeInsets.symmetric(vertical: 2),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        LongPressDraggable<_CardDragPayload>(
-          data: _CardDragPayload(card: card, fromListId: fromListId),
-          feedback: Material(
-            elevation: 6,
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(width: 260, child: tile),
-          ),
-          childWhenDragging: Opacity(opacity: 0.3, child: tile),
-          child: tile,
-        ),
-      ],
+    return LongPressDraggable<_CardDragPayload>(
+      data: _CardDragPayload(card: card, fromListId: fromListId),
+      feedback: Material(
+        elevation: 6,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(width: 260, child: tile),
+      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: tile),
+      child: tile,
     );
   }
 }
@@ -648,32 +708,3 @@ class _CardEditSheetState extends State<_CardEditSheet> {
   }
 }
 
-Future<String?> _promptForText({
-  required BuildContext context,
-  required String title,
-  required String hint,
-}) async {
-  final controller = TextEditingController();
-  return showDialog<String>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        decoration: InputDecoration(hintText: hint),
-        onSubmitted: (v) => Navigator.of(ctx).pop(v),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(ctx).pop(controller.text),
-          child: const Text('Save'),
-        ),
-      ],
-    ),
-  );
-}
