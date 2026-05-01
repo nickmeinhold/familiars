@@ -9,6 +9,7 @@ RUN dart pub get
 
 # Copy source and compile to native exe
 COPY bin/ bin/
+COPY lib/ lib/
 RUN dart compile exe bin/server.dart -o bin/server
 
 # Runtime stage — debian bookworm-slim mirrors the downstream-server pattern.
