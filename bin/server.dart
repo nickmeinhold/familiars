@@ -1,12 +1,20 @@
 import 'dart:io';
 
+import 'package:familiars_server/db/database.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 
-/// Phase 0 entrypoint — just enough to flip the live 502 into a 200.
-/// Boards/lists/cards/SSE/auth all land in subsequent steps.
+/// Phase 0 entrypoint — minimal Shelf server with /health and a
+/// Drift-backed SQLite database holding boards/lists/cards.
+/// Familiars/runs/SSE/auth land in subsequent phases.
 Future<void> main() async {
+  final dbPath = Platform.environment['FAMILIARS_DB_PATH'] ?? 'data/familiars.db';
+  final db = AppDatabase.open(dbPath);
+  // Touch the database so schema migrations actually run on boot.
+  await db.customSelect('SELECT 1').get();
+  print('drift schema ready (path: $dbPath)');
+
   final router = Router()..get('/health', _healthHandler);
 
   final handler = const Pipeline()
