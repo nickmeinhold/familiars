@@ -36,6 +36,12 @@ Future<void> main() async {
   final projectId =
       Platform.environment['FIREBASE_PROJECT_ID'] ?? 'downstream-181e2';
 
+  // Catch-all 404 handler on the auth-protected sub-router. Order matters:
+  // because this lives *inside* the [firebaseAuth] pipeline below, requests
+  // to undefined `/api/*` paths still hit the middleware first and get a
+  // 401 if unauthenticated, only reaching this 404 once auth passes. Don't
+  // "simplify" by moving the fallback above the mount — it would let
+  // unauthenticated callers probe the route surface.
   final apiRouter = Router()
     ..all('/<ignored|.*>', (Request _) => Response.notFound(
           '{"error":"not_found"}',

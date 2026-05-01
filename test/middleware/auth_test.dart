@@ -13,14 +13,15 @@ void main() {
     // tokens. The middleware's cert source returns the *first* keypair's cert
     // under the same kid, so signature verification must fail.
     late RSAPrivateKey attackerPrivKey;
+    late RSAPrivateKey trustedPrivKey;
     late String trustedCertPem;
 
     setUpAll(() {
       // Pre-generated 2048-bit RSA keypairs (PEM). Generated once with
-      // `openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048`
-      // and a self-signed cert via `openssl req -x509 -key …`. Inlined so
-      // tests run hermetically (no openssl at test time).
+      // `openssl genrsa -out … 2048` and self-signed certs via
+      // `openssl req -new -x509 -key …`. Inlined so tests run hermetically.
       trustedCertPem = _trustedCertPem;
+      trustedPrivKey = RSAPrivateKey(_trustedPrivKeyPem);
       attackerPrivKey = RSAPrivateKey(_attackerPrivKeyPem);
     });
 
@@ -117,6 +118,98 @@ void main() {
       ));
       expect(res.statusCode, 401);
     });
+
+    test('valid token → 200, uid in request context', () async {
+      // Happy path: token signed by the trusted key, claims well-formed,
+      // cert source advertises the trusted cert under the same kid.
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final jwt = JWT(
+        {
+          'iss': 'https://securetoken.google.com/$projectId',
+          'aud': projectId,
+          'sub': 'firebase-uid-abc',
+          'iat': now,
+          'exp': now + 3600,
+        },
+        header: {'kid': 'kid-1', 'alg': 'RS256', 'typ': 'JWT'},
+      );
+      final token = jwt.sign(trustedPrivKey, algorithm: JWTAlgorithm.RS256);
+
+      final res = await invoke(Request(
+        'GET',
+        Uri.parse('http://x/api/foo'),
+        headers: {'authorization': 'Bearer $token'},
+      ));
+      expect(res.statusCode, 200);
+      final body = jsonDecode(await res.readAsString()) as Map;
+      expect(body['uid'], 'firebase-uid-abc');
+    });
+
+    test('lowercase "bearer " scheme accepted (RFC 7235 §2.1)', () async {
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final jwt = JWT(
+        {
+          'iss': 'https://securetoken.google.com/$projectId',
+          'aud': projectId,
+          'sub': 'firebase-uid-xyz',
+          'iat': now,
+          'exp': now + 3600,
+        },
+        header: {'kid': 'kid-1', 'alg': 'RS256', 'typ': 'JWT'},
+      );
+      final token = jwt.sign(trustedPrivKey, algorithm: JWTAlgorithm.RS256);
+
+      final res = await invoke(Request(
+        'GET',
+        Uri.parse('http://x/api/foo'),
+        headers: {'authorization': 'bearer $token'},
+      ));
+      expect(res.statusCode, 200);
+    });
+
+    test('expired token → 401', () async {
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final jwt = JWT(
+        {
+          'iss': 'https://securetoken.google.com/$projectId',
+          'aud': projectId,
+          'sub': 'firebase-uid-abc',
+          'iat': now - 7200,
+          'exp': now - 3600,
+        },
+        header: {'kid': 'kid-1', 'alg': 'RS256', 'typ': 'JWT'},
+      );
+      final token = jwt.sign(trustedPrivKey, algorithm: JWTAlgorithm.RS256);
+
+      final res = await invoke(Request(
+        'GET',
+        Uri.parse('http://x/api/foo'),
+        headers: {'authorization': 'Bearer $token'},
+      ));
+      expect(res.statusCode, 401);
+    });
+
+    test('wrong audience → 401', () async {
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final jwt = JWT(
+        {
+          'iss': 'https://securetoken.google.com/$projectId',
+          'aud': 'some-other-project',
+          'sub': 'firebase-uid-abc',
+          'iat': now,
+          'exp': now + 3600,
+        },
+        header: {'kid': 'kid-1', 'alg': 'RS256', 'typ': 'JWT'},
+      );
+      final token = jwt.sign(trustedPrivKey, algorithm: JWTAlgorithm.RS256);
+
+      final res = await invoke(Request(
+        'GET',
+        Uri.parse('http://x/api/foo'),
+        headers: {'authorization': 'Bearer $token'},
+      ));
+      expect(res.statusCode, 401);
+    });
   });
 }
 
@@ -142,6 +235,38 @@ bXns12uwtH8+iqoVeF39nT7OTCM84zB7mm3wSUOt9bqFp/OLI0hvZaY6SOBpB6yv
 kElQbedIjrGKY7uP+JoKW1gPL739zg65h3oJXR+x5biKqPVPPjGMeST0kuCxxeJT
 JdacT1xk5U0VLreNVKOjQnlZebu2yHgq8sNUZdwr/cahYz2p90DkN5ZOE7EUfA==
 -----END CERTIFICATE-----
+''';
+
+// 2048-bit RSA private key matching [_trustedCertPem] — used to sign
+// happy-path JWTs in tests.
+const String _trustedPrivKeyPem = '''
+-----BEGIN RSA PRIVATE KEY-----
+MIIEogIBAAKCAQEAprlISAvBp6B2KV6woL/Alva5tfwz9K2MIl48N5rUYgBtPyh1
+fm1glgVm+i/u2Ml4QGW+MxLzaNcMsf2snwVwyC6zs1Zu/sknrFq8Yx02uFhgMePQ
+oJYmZWoqncgcHbYSgxRxqt11VhhJ3kRnZnXAmB8dEVNoyJSyw3gdHrT/O7Qe87f9
+ZJTfGEfbyDC8lK2GlkrB8Tp/ihV4aSEiQrPbgHNEoCf8DRW+tNvWz+JxZ7DScw8T
+eyfw2lmN0LcNKJ766LFj2HqD1kZIiYK3qKWgOx5hK06Kliwe5BIAZ7M3nMPITdfD
+kzpZzfFNpGzJodPhO1T+cvaCHBsLti6/MAREYwIDAQABAoIBACmD04LVIpiZ9TJh
++LteZBdzQlUVgt53ZICeVIJIFIB+uLVUXsVnePiCSd0cmG305POsIgtXubKucePU
+VeqXETlXn7mVWTgqYK2jPmuzt495uiJSJv4FxXPVVt1JGe8wCjYHnjI8yN3yWFp3
+UAQMaDO486T/zwS7OjRAMYgW68MytLJuhVtmuSzinXVg7xv4pTUAyusAsihYw+PN
+4ak5vl9CH66g6eLdB0Tn9W1AEAXHgqeflDrtuogRii5X0TlZR4rGGd+HC3+ThqzE
+UW2jR/r4Y1zf/YFDASywCwb7DrMaoyTVnWzKP2QSaOpsg5Q8dxN5LlAzRAGPCXKh
+RVdjiXkCgYEA3JvRV9obqolXSpAoKfRsNoqAVgaZbqnTlJRc2535nva5tqJ7ZSuZ
+/NVeBHPPEYRpls2Cnhkl3fKzEeQzMvcgSxuaFePdvREWVYqSPtdtGNyB/Jf1nAsB
+o/HLtmeWJFUZCnS6sCr2lBWjyVWfJoDry0fluiSbI4XB2mD8Dg2HRd8CgYEAwXh2
+2NbifS5DN8k6d1jt2pHinM0YnacQHFPeRzDa71tUc4vOj1KzFYi4yOmlMuY4FodQ
+0WVttmJ+9snEkacoLF9lUprR6KEXMNiVi7CQhkR8YrxtPaaANEO4IsQr25JxVo5S
+FDNzcWlmLWc0s8rUfMwiUwPFTVmLRCmnl/pMqf0CgYBPwFSxubt+rx/LaMncQOxN
+20wBzWjyRJqkf+4Bxt5SxUbl619Id7a3XDscyPD2mDPDvI+Xr+eskOyDb0fDCOu3
+u0a82x9yFhdI3Ut5RE/ASRcExbqYqrHxHpxSWKhCgjEHQqOqxB1X82q+giGCveCA
+IIHABTPAZ75ov97fBaz9aQKBgFpnkCGDSBJ2q7JFtaxPQdYAlYPv0rDYgA68ogFi
+MuvmIXBcxAj0+/n0CWTYyPkf2tWsJXezjbDMFcf8QH5PPdZ+PTp8Xdn2bH/GtRqx
+Rtd26Si6I9HLG91QR5r3UAcqRwvLNU97O1ajibttnpLlFKW8Pc3M1UVvskQHsuix
+bWGBAoGAJ8jDFTp9FSdlt16hxVoxBqxzZ+0aZ/joLuZojcUkPoAj8W9RiyRZq4bG
+UGJV1V1IbsWpUjPch+CPpA9psdqN4L0gR2OLPhUJ1BDALyPa19wjz1p9CgM7iCAP
+fK57GTR6Ph+OfEk5H+DyP3bsWm4eYp9KatpCsSxggdDgmELXavg=
+-----END RSA PRIVATE KEY-----
 ''';
 
 // 2048-bit RSA private key for the *attacker* — different key, so signatures

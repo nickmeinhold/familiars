@@ -55,10 +55,14 @@ Middleware firebaseAuth({
   return (Handler inner) {
     return (Request request) async {
       final authHeader = request.headers['authorization'];
-      if (authHeader == null || !authHeader.startsWith('Bearer ')) {
+      // RFC 7235 §2.1: auth scheme is case-insensitive ("Bearer", "bearer",
+      // "BEARER" all valid). The token portion (after the first space) is
+      // taken verbatim — base64url is case-sensitive.
+      if (authHeader == null || authHeader.length < 7 ||
+          authHeader.substring(0, 7).toLowerCase() != 'bearer ') {
         return _unauthenticated();
       }
-      final token = authHeader.substring('Bearer '.length).trim();
+      final token = authHeader.substring(7).trim();
       if (token.isEmpty) {
         return _unauthenticated();
       }
@@ -169,6 +173,10 @@ Future<String> _verifyFirebaseToken({
 /// Caches Google's public certs in-process, honouring `Cache-Control:
 /// max-age` on the response. Falls back to a 1-hour TTL if the header is
 /// missing or unparseable.
+///
+/// The single [http.Client] persists for the process lifetime so connection
+/// reuse works across cert rotations. Call [close] on graceful shutdown
+/// (or when discarding the source) to release the underlying socket pool.
 class _CachingGoogleCertSource {
   Map<String, String>? _cached;
   DateTime _expiresAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -181,6 +189,10 @@ class _CachingGoogleCertSource {
 
   _CachingGoogleCertSource({http.Client? client})
       : _client = client ?? http.Client();
+
+  /// Releases the underlying [http.Client]. Idempotent in spirit — call
+  /// once at server shutdown.
+  void close() => _client.close();
 
   Future<Map<String, String>> fetch() async {
     if (_cached != null && DateTime.now().isBefore(_expiresAt)) {
