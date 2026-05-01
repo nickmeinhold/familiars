@@ -247,6 +247,11 @@ void main() {
         }
       });
 
+      // Wait until the SSE subscription is fully wired before mutating —
+      // a broadcast StreamController drops events published before any
+      // listener attaches, so without this barrier the test races.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
       // Mutation on board B should not arrive on A's stream.
       final lB = await http.post(h.url('/api/boards/$boardB/lists'),
           body: jsonEncode({'name': 'noise'}),

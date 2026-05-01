@@ -66,9 +66,10 @@ void registerCardsRoutes(Router router, CardsRepo repo) {
       );
       return jsonCreated(card.toJson());
     } on ListNotFoundException {
-      return notFound('list not found on this board');
+      return notFound('list not found');
     } on BoardNotFoundException {
-      return notFound('list not found on this board');
+      // List exists but belongs to a different board than the URL claims.
+      return notFound('list does not belong to this board');
     }
   });
 

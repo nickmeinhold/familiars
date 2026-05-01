@@ -43,20 +43,29 @@ class ListsRepo {
     required String name,
     double? position,
   }) async {
-    final board = await (_db.select(_db.boards)
-          ..where((t) => t.id.equals(boardId)))
-        .getSingleOrNull();
-    if (board == null) {
-      throw BoardNotFoundException(boardId);
-    }
-    final pos = position ?? await _nextPosition(boardId);
-    final row = BoardList(
-      id: newUlid(),
-      boardId: boardId,
-      name: name,
-      position: pos,
-    );
-    await _db.into(_db.lists).insert(row);
+    // Wrap the existence check + max(position) read + insert in a single
+    // transaction so two concurrent creates can't both observe the same
+    // max and emit duplicate positions. SQLite's serialized writer makes
+    // this redundant in the default journal mode, but spelling it out
+    // (a) documents the invariant we depend on and (b) keeps us safe
+    // if WAL or per-connection pools are introduced later.
+    final row = await _db.transaction(() async {
+      final board = await (_db.select(_db.boards)
+            ..where((t) => t.id.equals(boardId)))
+          .getSingleOrNull();
+      if (board == null) {
+        throw BoardNotFoundException(boardId);
+      }
+      final pos = position ?? await _nextPosition(boardId);
+      final row = BoardList(
+        id: newUlid(),
+        boardId: boardId,
+        name: name,
+        position: pos,
+      );
+      await _db.into(_db.lists).insert(row);
+      return row;
+    });
     _bus.publish(boardId, BoardEvent('list_created', row.toJson()));
     return row;
   }

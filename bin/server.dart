@@ -36,7 +36,10 @@ import 'package:shelf_router/shelf_router.dart';
 /// Env:
 ///   - `FIREBASE_PROJECT_ID` (default: `downstream-181e2`) — JWT `aud`/`iss`.
 ///   - `FAMILIARS_TEST_MODE=1` — bypass Firebase auth (uid set to "test").
-///     Intended for local smoke tests; do NOT enable in production.
+///     Intended for local smoke tests; do NOT enable in production. The
+///     server refuses to start unless `FIREBASE_PROJECT_ID=test-project`
+///     is also set, so a stray `FAMILIARS_TEST_MODE=1` in a real env
+///     fails loud rather than shipping an unauth'd API.
 ///   - `PORT` (default: `8081`) — HTTP listen port.
 Future<void> main() async {
   final dbPath =
@@ -51,6 +54,22 @@ Future<void> main() async {
   final projectId =
       Platform.environment['FIREBASE_PROJECT_ID'] ?? 'downstream-181e2';
   final testMode = Platform.environment['FAMILIARS_TEST_MODE'] == '1';
+
+  // Refuse to start with auth bypassed if the configured Firebase project
+  // looks production-shaped. Anything other than the explicit
+  // `test-project` sentinel is treated as production. This catches the
+  // foot-gun where a docker-compose typo or stray env-var leak would ship
+  // an unauthenticated API. Fix locally by either unsetting
+  // FAMILIARS_TEST_MODE or setting FIREBASE_PROJECT_ID=test-project.
+  if (testMode && projectId != 'test-project') {
+    stderr.writeln(
+      'FATAL: FAMILIARS_TEST_MODE=1 set but FIREBASE_PROJECT_ID is '
+      '"$projectId" — refusing to start an unauthenticated API against a '
+      'production-shaped project. Set FIREBASE_PROJECT_ID=test-project '
+      'for local smoke tests, or unset FAMILIARS_TEST_MODE.',
+    );
+    exit(2);
+  }
 
   final bus = BoardEventBus();
   final boardsRepo = BoardsRepo(db);

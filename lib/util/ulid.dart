@@ -14,7 +14,9 @@ final Random _rng = Random.secure();
 String newUlid() {
   final now = DateTime.now().millisecondsSinceEpoch;
   final sb = StringBuffer();
-  // 10 chars of timestamp (50 bits, top 2 always 0 for the next ~10000 yrs).
+  // 10 Crockford chars × 5 bits = 50 bits of encoding space. The ULID spec
+  // defines a 48-bit timestamp; the top 2 bits of the encoding are
+  // therefore always zero (and stay that way for ~10 000 years).
   var ts = now;
   final tsChars = List<String>.filled(10, '0');
   for (var i = 9; i >= 0; i--) {

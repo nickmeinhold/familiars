@@ -46,31 +46,34 @@ class CardsRepo {
     double? position,
     String? prompt,
   }) async {
-    // Validate list exists AND belongs to the requested board. The latter
-    // matters because the URL has the boardId; a client supplying a listId
-    // from a different board is a bug, not a silent move.
-    final list = await (_db.select(_db.lists)
-          ..where((t) => t.id.equals(listId)))
-        .getSingleOrNull();
-    if (list == null) {
-      throw ListNotFoundException(listId);
-    }
-    if (list.boardId != boardId) {
-      throw BoardNotFoundException(boardId);
-    }
-    final pos = position ?? await _nextPositionInList(listId);
-    final card = Card(
-      id: newUlid(),
-      listId: listId,
-      title: title,
-      description: description,
-      position: pos,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
-      prUrl: null,
-      mediaKey: null,
-      prompt: prompt,
-    );
-    await _db.into(_db.cards).insert(card);
+    // See lists_repo.create for the same transaction-wraps-reads-and-write
+    // pattern. Cross-board listId is rejected as a separate exception so
+    // the router can return a clearer 404 message.
+    final card = await _db.transaction(() async {
+      final list = await (_db.select(_db.lists)
+            ..where((t) => t.id.equals(listId)))
+          .getSingleOrNull();
+      if (list == null) {
+        throw ListNotFoundException(listId);
+      }
+      if (list.boardId != boardId) {
+        throw BoardNotFoundException(boardId);
+      }
+      final pos = position ?? await _nextPositionInList(listId);
+      final card = Card(
+        id: newUlid(),
+        listId: listId,
+        title: title,
+        description: description,
+        position: pos,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+        prUrl: null,
+        mediaKey: null,
+        prompt: prompt,
+      );
+      await _db.into(_db.cards).insert(card);
+      return card;
+    });
     _bus.publish(boardId, BoardEvent('card_created', card.toJson()));
     return card;
   }
@@ -107,11 +110,19 @@ class CardsRepo {
       if (destList == null) {
         throw ListNotFoundException(listId);
       }
-      // Look up source list's board to compare.
+      // Look up source list's board to compare. The source list MUST exist
+      // because the FK from cards->lists is enforced — if it's missing,
+      // some other code path corrupted the DB. Surface that as a state
+      // error rather than a silent allow.
       final sourceList = await (_db.select(_db.lists)
             ..where((t) => t.id.equals(existing.listId)))
           .getSingleOrNull();
-      if (sourceList != null && sourceList.boardId != destList.boardId) {
+      if (sourceList == null) {
+        throw StateError(
+          'card ${existing.id} references missing list ${existing.listId}',
+        );
+      }
+      if (sourceList.boardId != destList.boardId) {
         throw ListNotFoundException(listId);
       }
     }

@@ -66,11 +66,14 @@ void registerBoardsRoutes(Router router, BoardsRepo repo) {
     if (name != null && name is! String) {
       return badRequest('name must be a string');
     }
+    // Single update path. Existence is checked first so that "no fields
+    // supplied" and "fields supplied" both return 404 on a missing board —
+    // and so future contributors adding optional fields don't have to
+    // remember to mirror the existence check across multiple branches.
+    final existing = await repo.findById(id);
+    if (existing == null) return notFound('board not found');
     if (name == null) {
-      // No-op: mirror current state without writing.
-      final board = await repo.findById(id);
-      if (board == null) return notFound('board not found');
-      return jsonOk(board.toJson());
+      return jsonOk(existing.toJson());
     }
     final updated = await repo.rename(id, name as String);
     if (updated == null) return notFound('board not found');
