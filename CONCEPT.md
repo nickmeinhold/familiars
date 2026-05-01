@@ -84,14 +84,9 @@ Imagine `~/git/experiments/familiars/bestiary.md` rendering all of them at once.
 
 ### The Calling Bell
 
-The board has one special card that doesn't represent a familiar. It represents *the bell*. You tap the bell, describe the task in natural language, and the bell:
+The board has one special card that doesn't represent a familiar. It represents *the bell* — a friction-free capture surface. You tap the bell, speak or type the thought, and a card lands in 💡 Ideas with `[bell]` on it. That's it. No agent runs; no routing happens.
 
-1. Reads the task description
-2. Surveys the bestiary
-3. Picks the familiar best suited (or recommends a small council if it's ambiguous)
-4. Summons them
-
-This is a meta-familiar — a router. Useful when you have a task and don't know who to assign. Also useful as a fallback when your specialists are all out.
+Triage is a separate, deliberate moment: later, you assign the captured card to a named familiar (Magnus, Cassia, Sieve…) or drop it. Assignment-by-name is always explicit. The Bell is the *capture* mechanism; the familiars are the *workers*. Keeping those two roles distinct is what preserves visible specialization — you always know which familiar answered what, because you chose them.
 
 ### Council mode
 
