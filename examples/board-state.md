@@ -39,7 +39,7 @@ Familiars currently on the board:
   🟣 Cassia  — running. 23 minutes used today. 2 cards.
   🟢 Sieve   — idle. Last summoned 3 days ago. 1 card waiting in In review.
   ⚫ Brick   — resting. Hit weekly budget cap on Tuesday's deploy. 0 cards.
-  🔔 The Bell — listening for taps with freeform tasks. 3 cards in Ideas.
+  🔔 The Bell — capture surface. 3 [bell] cards in Ideas awaiting triage.
 ```
 
 ## What the user sees over the course of a session
@@ -48,7 +48,7 @@ Familiars currently on the board:
 
 **09:15** — Sits at desk. Cassia's weekly digest is waiting on the board with three flagged-for-attention items. User reads the digest, decides one paper is worth a deep read. Drags that paper's mini-card from "queued" into Cassia's lane and taps ▶ for a thorough analysis. Cassia starts.
 
-**11:00** — Realizes she wants to refactor the torrent selection scoring. Doesn't break flow — taps the Bell, says "magnus, refactor _selectBestTorrent to extract the size-penalty logic." Magnus picks up the task, opens a branch.
+**11:00** — Realizes she wants to refactor the torrent selection scoring. Doesn't break flow — taps the Bell, says "refactor _selectBestTorrent to extract the size-penalty logic." A `[bell]` card lands in 💡 Ideas. No agent runs. She returns to her current crux. A minute later, at a natural pause, she drags the card onto Magnus's lane and taps ▶. Magnus picks it up and opens a branch.
 
 **12:30** — Lunch. Magnus's run completed while she was eating. Card now sits in In review with a PR link. She glances, approves on phone, drags to ✅ Done. PR auto-merges.
 
@@ -62,7 +62,7 @@ Familiars currently on the board:
 
 **Cassia disagrees with herself.** Two of her digest entries contradict each other. Card description shows the contradiction; she flags for human review rather than picking one. The user adjudicates.
 
-**The Bell can't decide.** A freeform task lands and the bell isn't sure who to summon. Card description: *"Three candidates: Magnus (codebase familiarity), Cassia (research lens), or me-as-bell (general). Specify in the description."* User taps the right one or rephrases.
+**An ambiguous capture lands in 💡 Ideas.** A `[bell]` card arrives reading *"refactor the torrent scoring so it weighs seeders more"* — could be a Magnus task (codebase) or a Cassia task (survey scoring approaches first). No agent runs; the card just sits in Ideas. At triage time the user picks: drag onto Magnus's lane, drag onto Cassia's, or rephrase the card before assigning. The Bell never guesses — disambiguation is the user's deliberate moment.
 
 ## What I (Claude) actually like about this design
 
