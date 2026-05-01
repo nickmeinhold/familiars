@@ -12,11 +12,12 @@ Get the kanban-shaped CRUD running with real-time updates. No familiar logic, no
 - SSE channel emits card/list mutations
 - Mobile screen: list-of-lists, draggable cards, real-time
 - Bearer auth (same Firebase project as downstream)
+- New boards seed a default `💡 Ideas` list (the canonical capture destination)
 - The Bell: tap-to-capture UI gesture that drops a `[bell]` card into 💡 Ideas with no agent run; triage to a named familiar is a later, deliberate user action
 
 **Why first:** validates the infra pattern translates cleanly. If anything's broken in the boilerplate, you find out before the agent layer compounds the bugs. Also gives you a working tool immediately — usable as a plain kanban while the rest is built.
 
-**Out of scope here:** familiars, agent spawning, mcp-familiars, web UI, sigils, anything fictional. Just the board.
+**Out of scope here:** familiars, agent spawning, mcp-familiars, web UI, sigils, any agent/familiar fiction. Just the board (and the Bell, which is pure capture — no agent runs).
 
 ## Phase 1: First binding
 
