@@ -12,6 +12,8 @@ dependencies:
   drift: ^2.20.0
   sqlite3: ^2.4.0
   path: ^1.9.0
+  dart_jsonwebtoken: ^2.14.0
+  http: ^1.2.0
 
 dev_dependencies:
   drift_dev: ^2.20.0
