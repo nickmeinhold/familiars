@@ -30,7 +30,7 @@ This is the load-bearing UX claim: if capture is friction-free, the brain releas
 
 A user looking at the bestiary should be able to tell, at a glance, what each familiar is good at. From sigil, from name, from recent activity, from memory excerpts. *Specialization* is what makes the system feel like a team rather than a tool.
 
-Resist any feature that "smooths over" specialization. Don't auto-route everything to a generalist. The Bell exists for ambiguous cases; assignment-by-name is the default.
+Resist any feature that "smooths over" specialization. Don't auto-route everything to a generalist. The Bell is a *capture* surface, not a router — it drops a `[bell]` card into 💡 Ideas; assignment-by-name during triage is always explicit.
 
 ## 6. Agents are bound, not borrowed
 

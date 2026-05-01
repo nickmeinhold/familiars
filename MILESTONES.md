@@ -52,7 +52,7 @@ Familiars summon familiars. Council mode. The Calling Bell.
 
 - mcp-familiars: `familiar:summon` for chaining
 - Council: tap "Council" on a card → multi-familiar parallel summon, results side-by-side
-- The Bell: a special card that routes to the best familiar for a freeform task
+- The Bell: a friction-free capture surface — taps drop a `[bell]` card into 💡 Ideas with no agent run; triage to a named familiar is a separate, deliberate user action
 - Run history view per familiar: searchable grimoire
 
 **Where it gets weird (in the good way).** This is when the system stops being "I tap, agent runs" and starts being "agents collaborating, I observe."
