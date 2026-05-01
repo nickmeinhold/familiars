@@ -12,6 +12,7 @@ Get the kanban-shaped CRUD running with real-time updates. No familiar logic, no
 - SSE channel emits card/list mutations
 - Mobile screen: list-of-lists, draggable cards, real-time
 - Bearer auth (same Firebase project as downstream)
+- The Bell: tap-to-capture UI gesture that drops a `[bell]` card into 💡 Ideas with no agent run; triage to a named familiar is a later, deliberate user action
 
 **Why first:** validates the infra pattern translates cleanly. If anything's broken in the boilerplate, you find out before the agent layer compounds the bugs. Also gives you a working tool immediately — usable as a plain kanban while the rest is built.
 
@@ -48,11 +49,10 @@ More familiars. Patterns for binding emerge. Memory accumulation matters.
 
 ## Phase 3: Composability
 
-Familiars summon familiars. Council mode. The Calling Bell.
+Familiars summon familiars. Council mode.
 
 - mcp-familiars: `familiar:summon` for chaining
 - Council: tap "Council" on a card → multi-familiar parallel summon, results side-by-side
-- The Bell: a friction-free capture surface — taps drop a `[bell]` card into 💡 Ideas with no agent run; triage to a named familiar is a separate, deliberate user action
 - Run history view per familiar: searchable grimoire
 
 **Where it gets weird (in the good way).** This is when the system stops being "I tap, agent runs" and starts being "agents collaborating, I observe."
