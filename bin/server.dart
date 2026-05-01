@@ -2,17 +2,26 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:familiars_server/db/database.dart';
+import 'package:familiars_server/middleware/auth.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 
-/// Phase 0 entrypoint — minimal Shelf server with /health and a
-/// Drift-backed SQLite database holding boards/lists/cards.
-/// Familiars/runs/SSE/auth land in subsequent phases.
+/// Phase 0 entrypoint.
 ///
-/// Override the database path with `FAMILIARS_DB_PATH`
-/// (default: `data/familiars.db` relative to cwd). Override the
-/// HTTP port with `PORT` (default: 8081).
+/// Routes:
+///   - `GET /health` — unauthenticated liveness probe.
+///   - `/api/*`     — Firebase-authenticated; protected by [firebaseAuth].
+///                     No endpoints exist yet; the prefix is mounted so future
+///                     endpoints inherit auth automatically.
+///
+/// Storage: a Drift-backed SQLite database (boards/lists/cards) opened at
+/// startup. Override the path with `FAMILIARS_DB_PATH`
+/// (default: `data/familiars.db` relative to cwd).
+///
+/// Env:
+///   - `FIREBASE_PROJECT_ID` (default: `downstream-181e2`) — JWT `aud` / `iss`.
+///   - `PORT` (default: `8081`) — HTTP listen port.
 Future<void> main() async {
   final dbPath =
       Platform.environment['FAMILIARS_DB_PATH'] ?? 'data/familiars.db';
@@ -24,16 +33,33 @@ Future<void> main() async {
   await db.select(db.boards).get();
   print('drift schema ready (path: $dbPath)');
 
-  final router = Router()..get('/health', _healthHandler);
+  final projectId =
+      Platform.environment['FIREBASE_PROJECT_ID'] ?? 'downstream-181e2';
 
-  final handler = const Pipeline()
-      .addMiddleware(logRequests())
-      .addHandler(router.call);
+  final apiRouter = Router()
+    ..all('/<ignored|.*>', (Request _) => Response.notFound(
+          '{"error":"not_found"}',
+          headers: {'content-type': 'application/json'},
+        ));
+
+  final apiHandler = const Pipeline()
+      .addMiddleware(firebaseAuth(projectId: projectId))
+      .addHandler(apiRouter.call);
+
+  final root = Router()
+    ..get('/health', _healthHandler)
+    ..mount('/api/', apiHandler);
+
+  final handler =
+      const Pipeline().addMiddleware(logRequests()).addHandler(root.call);
 
   final port = int.parse(Platform.environment['PORT'] ?? '8081');
   final server =
       await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
-  print('familiars-server listening on http://${server.address.host}:${server.port}');
+  print(
+    'familiars-server listening on http://${server.address.host}:${server.port} '
+    '(firebase project: $projectId)',
+  );
 
   // Graceful shutdown: close HTTP listener, then the database.
   // SIGTERM is what Docker / systemd send on stop; SIGINT is Ctrl+C.
