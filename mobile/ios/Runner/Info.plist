@@ -33,6 +33,13 @@
 			</array>
 		</dict>
 	</array>
+	<!-- google_sign_in 7.x reads GIDClientID from Info.plist on iOS. The
+	     URL scheme above is the reversed form used for the OAuth callback;
+	     this plain client id is what the SDK validates at signIn() time.
+	     Both are needed. Same OAuth client as downstream-mobile (shared
+	     Firebase project downstream-181e2). -->
+	<key>GIDClientID</key>
+	<string>482686216746-uem247orm26i3kqiedrvhv5k7huopevq.apps.googleusercontent.com</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
