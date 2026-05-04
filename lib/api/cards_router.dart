@@ -64,7 +64,8 @@ void registerCardsRoutes(Router router, CardsRepo repo) {
         position: (position as num?)?.toDouble(),
         prompt: prompt as String?,
       );
-      return jsonCreated(card.toJson());
+      // Wire payload includes boardId — see CardsRepo.update doc for why.
+      return jsonCreated({...card.toJson(), 'boardId': bid});
     } on ListNotFoundException {
       return notFound('list not found');
     } on BoardNotFoundException {
@@ -118,7 +119,7 @@ void registerCardsRoutes(Router router, CardsRepo repo) {
     }
 
     try {
-      final updated = await repo.update(
+      final result = await repo.update(
         id,
         title: title as String?,
         listId: listId as String?,
@@ -128,8 +129,8 @@ void registerCardsRoutes(Router router, CardsRepo repo) {
         prUrl: prUrl,
         mediaKey: mediaKey,
       );
-      if (updated == null) return notFound('card not found');
-      return jsonOk(updated.toJson());
+      if (result == null) return notFound('card not found');
+      return jsonOk({...result.card.toJson(), 'boardId': result.boardId});
     } on ListNotFoundException {
       return notFound('destination list not found or on a different board');
     }

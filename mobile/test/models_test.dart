@@ -15,6 +15,7 @@ void main() {
           'cards': [
             {
               'id': 'c2',
+              'boardId': 'b1',
               'listId': 'l2',
               'title': 'second',
               'description': null,
@@ -37,20 +38,22 @@ void main() {
     expect(board.lists.first.id, 'l1');
     expect(board.lists.last.id, 'l2');
     expect(board.lists.last.cards.first.title, 'second');
+    expect(board.lists.last.cards.first.boardId, 'b1');
   });
 
-  test('Card.fromJson parses a server payload without boardId', () {
-    // Cards on the server have no boardId column — boardId is derived
-    // via the parent list. A card payload from GET /api/boards/<id>
-    // therefore has {id, listId, title, position, ...} but no boardId.
-    // Regression for "Invalid Card JSON" / "board id not present" bug.
+  test('Card.fromJson tolerates absent optional nullable fields', () {
+    // The server only sends nullable fields when they're set — absent is
+    // valid. Regression for the broken `'foo?': T? foo` map-pattern
+    // syntax that interpreted the question-marked key as a literal.
     final card = Card.fromJson({
       'id': 'c1',
+      'boardId': 'b1',
       'listId': 'l1',
       'title': 'hello',
       'position': 1.5,
     });
     expect(card.id, 'c1');
+    expect(card.boardId, 'b1');
     expect(card.listId, 'l1');
     expect(card.title, 'hello');
     expect(card.position, 1.5);
@@ -58,9 +61,25 @@ void main() {
     expect(card.prompt, isNull);
   });
 
+  test('Card.fromJson rejects payload without boardId', () {
+    // Server enriches every card payload with boardId so SSE events are
+    // self-describing. A card without boardId is a contract violation we
+    // surface at the boundary rather than tolerate silently.
+    expect(
+      () => Card.fromJson({
+        'id': 'c1',
+        'listId': 'l1',
+        'title': 'hello',
+        'position': 1.5,
+      }),
+      throwsFormatException,
+    );
+  });
+
   test('Card.copyWith preserves untouched fields', () {
     const card = Card(
       id: 'c1',
+      boardId: 'b1',
       listId: 'l1',
       title: 'orig',
       description: 'd',
@@ -71,6 +90,7 @@ void main() {
     );
     final moved = card.copyWith(listId: 'l2', position: 2.5);
     expect(moved.title, 'orig');
+    expect(moved.boardId, 'b1');
     expect(moved.listId, 'l2');
     expect(moved.position, 2.5);
     expect(moved.description, 'd');

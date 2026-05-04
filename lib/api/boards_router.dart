@@ -49,7 +49,13 @@ void registerBoardsRoutes(Router router, BoardsRepo repo) {
         for (final l in lists)
           {
             ...l.toJson(),
-            'cards': cardsByList[l.id] ?? const [],
+            // Each card payload carries boardId — clients reducing SSE
+            // events without previously-loaded list state can read the
+            // event self-describingly. See CardsRepo.update doc.
+            'cards': [
+              for (final c in cardsByList[l.id] ?? const <Map<String, Object?>>[])
+                {...c, 'boardId': id},
+            ],
           },
       ],
     });

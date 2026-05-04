@@ -53,11 +53,14 @@ class BoardList {
 
 /// A card — the locus of a familiar's work, in phase 0 just title/description.
 ///
-/// Cards have no `boardId` field — the parent list owns that relationship.
-/// Screens that need the board id derive it from `widget.boardId` (the
-/// currently-open board) rather than carrying it on every card.
+/// Carries `boardId` even though the server's Cards table has no such
+/// column — the field is enriched at the JSON projection so SSE event
+/// payloads (`card_created` / `card_updated` / `card_moved`) are
+/// self-describing. A reducer that sees a card event for a card whose
+/// parent list isn't in local state yet can still resolve the board.
 class Card {
   final String id;
+  final String boardId;
   final String listId;
   final String title;
   final String? description;
@@ -68,6 +71,7 @@ class Card {
 
   const Card({
     required this.id,
+    required this.boardId,
     required this.listId,
     required this.title,
     required this.description,
@@ -80,12 +84,14 @@ class Card {
   factory Card.fromJson(Map<String, dynamic> json) {
     if (json case {
       'id': String id,
+      'boardId': String boardId,
       'listId': String listId,
       'title': String title,
       'position': num position,
     }) {
       return Card(
         id: id,
+        boardId: boardId,
         listId: listId,
         title: title,
         position: position.toDouble(),
@@ -108,6 +114,7 @@ class Card {
     String? mediaKey,
   }) => Card(
     id: id,
+    boardId: boardId,
     listId: listId ?? this.listId,
     title: title ?? this.title,
     description: description ?? this.description,

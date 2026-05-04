@@ -74,7 +74,10 @@ class CardsRepo {
       await _db.into(_db.cards).insert(card);
       return card;
     });
-    _bus.publish(boardId, BoardEvent('card_created', card.toJson()));
+    _bus.publish(
+      boardId,
+      BoardEvent('card_created', {...card.toJson(), 'boardId': boardId}),
+    );
     return card;
   }
 
@@ -85,8 +88,12 @@ class CardsRepo {
   /// only the position changes within the same list, a `card_updated` event
   /// fires — clients can treat both shapes as "re-render this card".
   ///
-  /// Returns the updated card, or `null` if [id] was not found.
-  Future<Card?> update(
+  /// Returns a `(card, boardId)` record on success, or `null` if [id] was
+  /// not found. Callers want both — REST responses now include `boardId` on
+  /// the card payload (so SSE events arriving for a card without
+  /// previously-loaded list state are self-describing), and the router
+  /// would otherwise have to look it up separately.
+  Future<({Card card, String boardId})?> update(
     String id, {
     String? title,
     Object? description = _absent,
@@ -154,17 +161,22 @@ class CardsRepo {
     // Resolve the parent board for fan-out. If listId changed, we use the
     // destination board id (which we've validated equals the source).
     final boardId = await _boardIdForList(destListId);
-    if (boardId != null) {
-      final moved = listId != null && listId != existing.listId;
-      _bus.publish(
-        boardId,
-        BoardEvent(
-          moved ? 'card_moved' : 'card_updated',
-          updated.toJson(),
-        ),
+    if (boardId == null) {
+      // Source list disappeared between the FK-enforced read and now —
+      // would have thrown a StateError above if listId moved. If we got
+      // here, the card row exists but its list doesn't, which is a
+      // schema-violation we surface rather than silently swallow.
+      throw StateError(
+        'card $id references missing list $destListId',
       );
     }
-    return updated;
+    final moved = listId != null && listId != existing.listId;
+    final payload = {...updated.toJson(), 'boardId': boardId};
+    _bus.publish(
+      boardId,
+      BoardEvent(moved ? 'card_moved' : 'card_updated', payload),
+    );
+    return (card: updated, boardId: boardId);
   }
 
   /// Delete card [id]. Returns `true` if a row was deleted.
