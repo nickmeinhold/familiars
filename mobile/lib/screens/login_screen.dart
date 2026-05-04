@@ -1,8 +1,16 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../services/auth_service.dart';
 
-/// Sign-in entry point for the familiars app. Google Sign-In only at phase 0.
+/// Sign-in entry point for the familiars app.
+///
+/// Both Apple and Google are offered. On iOS, Apple is presented first
+/// because it's OS-native (works on the simulator with no extra config)
+/// and Apple's review guidelines require it to be at-least-as-prominent
+/// as third-party providers when the app supports those.
 class LoginScreen extends StatefulWidget {
   final AuthService auth;
   const LoginScreen({super.key, required this.auth});
@@ -15,12 +23,12 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _error;
 
-  Future<void> _signInWithGoogle() async {
+  Future<void> _runSignIn(Future<String?> Function() signIn) async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
-    final error = await widget.auth.signInWithGoogle();
+    final error = await signIn();
     if (!mounted) return;
     setState(() {
       _isLoading = false;
@@ -30,6 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final showApple = Platform.isIOS || Platform.isMacOS;
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -38,7 +47,8 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.auto_awesome, size: 80, color: Colors.deepPurple),
+              const Icon(Icons.auto_awesome,
+                  size: 80, color: Colors.deepPurple),
               const SizedBox(height: 24),
               Text(
                 'Familiars',
@@ -68,8 +78,21 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                 ),
+              if (showApple) ...[
+                SignInWithAppleButton(
+                  onPressed: _isLoading
+                      ? () {}
+                      : () => _runSignIn(widget.auth.signInWithApple),
+                  style: Theme.of(context).brightness == Brightness.dark
+                      ? SignInWithAppleButtonStyle.white
+                      : SignInWithAppleButtonStyle.black,
+                ),
+                const SizedBox(height: 12),
+              ],
               FilledButton.icon(
-                onPressed: _isLoading ? null : _signInWithGoogle,
+                onPressed: _isLoading
+                    ? null
+                    : () => _runSignIn(widget.auth.signInWithGoogle),
                 icon: _isLoading
                     ? const SizedBox(
                         width: 20,
