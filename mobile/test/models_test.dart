@@ -15,7 +15,6 @@ void main() {
           'cards': [
             {
               'id': 'c2',
-              'boardId': 'b1',
               'listId': 'l2',
               'title': 'second',
               'description': null,
@@ -40,10 +39,28 @@ void main() {
     expect(board.lists.last.cards.first.title, 'second');
   });
 
+  test('Card.fromJson parses a server payload without boardId', () {
+    // Cards on the server have no boardId column — boardId is derived
+    // via the parent list. A card payload from GET /api/boards/<id>
+    // therefore has {id, listId, title, position, ...} but no boardId.
+    // Regression for "Invalid Card JSON" / "board id not present" bug.
+    final card = Card.fromJson({
+      'id': 'c1',
+      'listId': 'l1',
+      'title': 'hello',
+      'position': 1.5,
+    });
+    expect(card.id, 'c1');
+    expect(card.listId, 'l1');
+    expect(card.title, 'hello');
+    expect(card.position, 1.5);
+    expect(card.description, isNull);
+    expect(card.prompt, isNull);
+  });
+
   test('Card.copyWith preserves untouched fields', () {
     const card = Card(
       id: 'c1',
-      boardId: 'b1',
       listId: 'l1',
       title: 'orig',
       description: 'd',
