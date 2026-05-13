@@ -3,6 +3,9 @@ build/
 .packages
 data/
 
+# Claude Code local config (per-clone)
+.claude/
+
 # Flutter mobile sub-project
 mobile/.dart_tool/
 mobile/build/

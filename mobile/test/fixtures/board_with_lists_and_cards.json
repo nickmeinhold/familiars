@@ -1,0 +1,79 @@
+{
+  "id": "<id-1>",
+  "name": "Demo",
+  "createdAt": "<epoch-ms>",
+  "lists": [
+    {
+      "id": "<id-2>",
+      "boardId": "<id-1>",
+      "name": "Backlog",
+      "position": 1.0,
+      "cards": [
+        {
+          "id": "<id-3>",
+          "listId": "<id-2>",
+          "title": "Minimal card",
+          "description": null,
+          "position": 1.0,
+          "createdAt": "<epoch-ms>",
+          "prUrl": null,
+          "mediaKey": null,
+          "prompt": null,
+          "boardId": "<id-1>"
+        }
+      ]
+    },
+    {
+      "id": "<id-4>",
+      "boardId": "<id-1>",
+      "name": "Doing",
+      "position": 2.0,
+      "cards": [
+        {
+          "id": "<id-5>",
+          "listId": "<id-4>",
+          "title": "Card with description",
+          "description": "Some longer text\nwith a newline",
+          "position": 1.0,
+          "createdAt": "<epoch-ms>",
+          "prUrl": null,
+          "mediaKey": null,
+          "prompt": null,
+          "boardId": "<id-1>"
+        },
+        {
+          "id": "<id-6>",
+          "listId": "<id-4>",
+          "title": "Fully-populated card",
+          "description": "desc",
+          "position": 2.0,
+          "createdAt": "<epoch-ms>",
+          "prUrl": "https://github.com/example/familiars/pull/1",
+          "mediaKey": "media/abc123.png",
+          "prompt": "Make it shine",
+          "boardId": "<id-1>"
+        }
+      ]
+    },
+    {
+      "id": "<id-7>",
+      "boardId": "<id-1>",
+      "name": "Done",
+      "position": 3.0,
+      "cards": [
+        {
+          "id": "<id-8>",
+          "listId": "<id-7>",
+          "title": "Done card",
+          "description": "",
+          "position": 1.0,
+          "createdAt": "<epoch-ms>",
+          "prUrl": null,
+          "mediaKey": null,
+          "prompt": null,
+          "boardId": "<id-1>"
+        }
+      ]
+    }
+  ]
+}
