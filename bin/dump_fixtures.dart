@@ -182,8 +182,12 @@ Future<void> main() async {
     final boardsList = await http.get(url('/api/boards'));
 
     // ---- Pretty-print and write ----
-    final fixturesDir =
-        Directory('${Directory.current.path}/mobile/test/fixtures');
+    // Resolve relative to this script (<repo>/bin/dump_fixtures.dart),
+    // not the CWD — otherwise running from `mobile/` (or anywhere
+    // else) would silently land fixtures in the wrong directory.
+    final scriptFile = File.fromUri(Platform.script);
+    final repoRoot = scriptFile.parent.parent.path;
+    final fixturesDir = Directory('$repoRoot/mobile/test/fixtures');
     if (!fixturesDir.existsSync()) {
       fixturesDir.createSync(recursive: true);
     }
