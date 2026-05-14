@@ -582,9 +582,19 @@ class _GapDropTargetState extends State<_GapDropTarget> {
           toIndex: widget.index,
         );
       },
+      // The indicator's own height already grows on hover; the surrounding
+      // SizedBox in the expand path gives the tail target a generous hit
+      // area for "drop into empty whitespace below the last card". Expanded
+      // would be wrong here — this widget is a ListView.builder item, not a
+      // Flex child, and iOS 26 asserts on the parent-data mismatch.
       builder: (_, __, ___) => indicator,
     );
-    return widget.expand ? Expanded(child: target) : target;
+    if (!widget.expand) return target;
+    // 0.6 of the viewport is enough to feel like "the rest of the column"
+    // without being so large that the scroll position jumps awkwardly when
+    // the list is short.
+    final tailHeight = MediaQuery.of(context).size.height * 0.6;
+    return SizedBox(height: tailHeight, child: target);
   }
 }
 
